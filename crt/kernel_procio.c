@@ -35,7 +35,7 @@ kernel_virt2phys(unsigned long pml4u, unsigned long cr3, unsigned long vaddr,
   unsigned long table_index;
   unsigned long pte = cr3;
 
-  for(int bitpos=39; bitpos>=12; bitpos-=9) {
+  for(long bitpos=39; bitpos>=12; bitpos-=9) {
     table_index = (vaddr >> bitpos) & ((1ull << 9) - 1);
     table_offset = table_index * 8;
     pte &= PG_FRAME;
