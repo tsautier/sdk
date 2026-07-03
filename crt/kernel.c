@@ -55,12 +55,12 @@ typedef union kernel_pipebuf {
     unsigned int size;
     unsigned long kaddr;
     unsigned long reserved;
-  } pipe_buffer;
+  } pbuf;
 
   struct __attribute__((packed)) {
-    unsigned long buf;
+    unsigned long addr;
     unsigned int reserved[3];
-  } victim_buffer;
+  } vbuf;
 } kernel_pipebuf_t;
 
 
@@ -500,7 +500,7 @@ __kernel_init(payload_args_t* args) {
 static int
 kernel_write(unsigned long addr, void* data, unsigned long len) {
   kernel_pipebuf_t buf = {
-    .victim_buffer.buf = addr,
+    .vbuf.addr = addr,
   };
 
   // sanity check for invalid kernel pointers
@@ -538,9 +538,9 @@ kernel_copyin(const void *uaddr, unsigned long kaddr, unsigned long len) {
     return -1;
   }
 
-  buf.pipe_buffer.size = 0x40000000;
-  buf.pipe_buffer.kaddr = kaddr;
-  buf.pipe_buffer.reserved = 0;
+  buf.pbuf.size = 0x40000000;
+  buf.pbuf.kaddr = kaddr;
+  buf.pbuf.reserved = 0;
 
   if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
     return -1;
@@ -570,9 +570,9 @@ kernel_copyout(unsigned long kaddr, void *uaddr, unsigned long len) {
     return -1;
   }
 
-  buf.pipe_buffer.size = 0x40000000;
-  buf.pipe_buffer.kaddr = kaddr;
-  buf.pipe_buffer.reserved = 0;
+  buf.pbuf.size = 0x40000000;
+  buf.pbuf.kaddr = kaddr;
+  buf.pbuf.reserved = 0;
 
   if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
     return -1;
