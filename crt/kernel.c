@@ -39,10 +39,11 @@ along with this program; see the file COPYING. If not, see
 #define PROT_READ  1
 #define PROT_WRITE 2
 
-#define IN6_PKTINFOSZ 5 // (20/4)
+#define IN6_PKTINFOSZ 5
+
 
 #pragma pack(4)
-typedef union kernel_pipe_buf {
+typedef union kernel_pipebuf {
   unsigned int n[IN6_PKTINFOSZ];
   struct f {
     unsigned int cnt;
@@ -61,7 +62,7 @@ typedef union kernel_pipe_buf {
     unsigned long buffer;
     unsigned int reserved[3];
   } victim_buffer;
-} kernel_pipe_buf;
+} kernel_pipebuf_t;
 #pragma pack()
 
 /**
@@ -499,7 +500,9 @@ __kernel_init(payload_args_t* args) {
  **/
 static int
 kernel_write(unsigned long addr, void* data, unsigned long len) {
-  kernel_pipe_buf write_buf;
+  kernel_pipebuf_t buf = {
+    .victim_buffer.buffer = addr,
+  };
 
   // sanity check for invalid kernel pointers
   if(!(addr & 0xffff000000000000)) {
@@ -507,13 +510,8 @@ kernel_write(unsigned long addr, void* data, unsigned long len) {
     return -1;
   }
 
-  write_buf.victim_buffer.buffer = addr;
-  write_buf.victim_buffer.reserved[0] = 0;
-  write_buf.victim_buffer.reserved[1] = 0;
-  write_buf.victim_buffer.reserved[2] = 0;
-
   if(__crt_syscall(SYS_setsockopt, MASTER_SOCK, IPPROTO_IPV6, IPV6_PKTINFO,
-		   &write_buf, sizeof(write_buf))) {
+		   &buf, sizeof(buf))) {
     return -1;
   }
 
@@ -528,37 +526,27 @@ kernel_write(unsigned long addr, void* data, unsigned long len) {
 
 int
 kernel_copyin(const void *uaddr, unsigned long kaddr, unsigned long len) {
-  kernel_pipe_buf write_buf;
+  kernel_pipebuf_t buf = {
+    .flags.reserved[0] = 0x40000000
+  };
 
   if(!kaddr || !uaddr || !len) {
     SET_ERRNO(EINVAL);
     return -1;
   }
 
-  // Set pipe flags
-  // `write_buf.flags.reserved[0]` is set to not have an empty buffer
-  // https://github.com/PS5Dev/PS5SDK/blob/a2e03a2a0231a3a3397fa6cd087a01ca6d04f273/crt/kernel_helpers.c#L49
-  // https://github.com/freebsd/freebsd-src/blob/release/11.4.0/sys/netinet6/ip6_output.c#L2685
-  write_buf.flags.cnt = 0;
-  write_buf.flags.in = 0;
-  write_buf.flags.out = 0;
-  write_buf.flags.reserved[0] = 0x40000000; // set by next kernel_write
-  write_buf.flags.reserved[1] = 0; // set by next kernel_write
-
-  if(kernel_write(pipe_addr, &write_buf, sizeof(write_buf))) {
+  if(kernel_write(pipe_addr, &buf, sizeof(buf))) {
     return -1;
   }
 
-  // Set pipe data addr
-  write_buf.pipe_buffer.size = 0x40000000;
-  write_buf.pipe_buffer.buffer = kaddr;
-  write_buf.pipe_buffer.reserved = 0;
+  buf.pipe_buffer.size = 0x40000000;
+  buf.pipe_buffer.buffer = kaddr;
+  buf.pipe_buffer.reserved = 0;
 
-  if(kernel_write(pipe_addr + 12, &write_buf, sizeof(write_buf))) {
+  if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
     return -1;
   }
 
-  // Perform write across pipe
   if(__crt_syscall(SYS_write, rw_pipe[1], uaddr, len) < 0) {
     return -1;
   }
@@ -569,36 +557,28 @@ kernel_copyin(const void *uaddr, unsigned long kaddr, unsigned long len) {
 
 int
 kernel_copyout(unsigned long kaddr, void *uaddr, unsigned long len) {
-  kernel_pipe_buf write_buf;
+  kernel_pipebuf_t buf = {
+    .flags.cnt = 0x40000000,
+    .flags.in = 0x40000000,
+  };
 
   if(!kaddr || !uaddr || !len) {
     SET_ERRNO(EINVAL);
     return -1;
   }
 
-  // Set pipe flags
-  write_buf.flags.cnt = 0x40000000;
-  write_buf.flags.in = 0x40000000;
-  write_buf.flags.out = 0;
-  // https://github.com/PS5Dev/PS5SDK/blob/a2e03a2a0231a3a3397fa6cd087a01ca6d04f273/crt/kernel_helpers.c#L70
-  // not required as cnt, in are already set, so there's some data in this buffer
-  write_buf.flags.reserved[0] = 0; // set by next kernel_write
-  write_buf.flags.reserved[1] = 0; // set by next kernel_write
-
-  if(kernel_write(pipe_addr, &write_buf, sizeof(write_buf))) {
+  if(kernel_write(pipe_addr, &buf, sizeof(buf))) {
     return -1;
   }
 
-  // Set pipe data addr
-  write_buf.pipe_buffer.size = 0x40000000;
-  write_buf.pipe_buffer.buffer = kaddr;
-  write_buf.pipe_buffer.reserved = 0;
+  buf.pipe_buffer.size = 0x40000000;
+  buf.pipe_buffer.buffer = kaddr;
+  buf.pipe_buffer.reserved = 0;
 
-  if(kernel_write(pipe_addr + 12, &write_buf, sizeof(write_buf))) {
+  if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
     return -1;
   }
 
-  // Perform read across pipe
   if(__crt_syscall(SYS_read, rw_pipe[0], uaddr, len) < 0) {
     return -1;
   }
