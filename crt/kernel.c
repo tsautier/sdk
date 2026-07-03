@@ -42,28 +42,26 @@ along with this program; see the file COPYING. If not, see
 #define IN6_PKTINFOSZ 5
 
 
-#pragma pack(4)
 typedef union kernel_pipebuf {
   unsigned int n[IN6_PKTINFOSZ];
-  struct {
+  struct __attribute__((packed)) {
     unsigned int cnt;
     unsigned int in;
     unsigned int out;
     unsigned long reserved;
   } flags;
 
-  struct {
+  struct __attribute__((packed)) {
     unsigned int size;
     unsigned long kaddr;
     unsigned long reserved;
   } pipe_buffer;
 
-  struct {
+  struct __attribute__((packed)) {
     unsigned long buf;
     unsigned int reserved[3];
   } victim_buffer;
 } kernel_pipebuf_t;
-#pragma pack()
 
 
 /**
