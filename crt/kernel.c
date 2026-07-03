@@ -42,6 +42,9 @@ along with this program; see the file COPYING. If not, see
 #define IN6_PKTINFOSZ 5
 
 
+/**
+ *
+ **/
 typedef union kernel_pipebuf {
   unsigned int n[IN6_PKTINFOSZ];
   struct __attribute__((packed)) {
@@ -58,7 +61,7 @@ typedef union kernel_pipebuf {
   } pbuf;
 
   struct __attribute__((packed)) {
-    unsigned long addr;
+    unsigned long kaddr;
     unsigned int reserved[3];
   } vbuf;
 } kernel_pipebuf_t;
@@ -498,13 +501,13 @@ __kernel_init(payload_args_t* args) {
  * Write data to an address in kernel space.
  **/
 static int
-kernel_write(unsigned long addr, void* data, unsigned long len) {
+kernel_write(unsigned long kaddr, void* data, unsigned long len) {
   kernel_pipebuf_t buf = {
-    .vbuf.addr = addr,
+    .vbuf.kaddr = kaddr
   };
 
   // sanity check for invalid kernel pointers
-  if(!(addr & 0xffff000000000000)) {
+  if(!(kaddr & 0xffff000000000000)) {
     SET_ERRNO(EFAULT);
     return -1;
   }
