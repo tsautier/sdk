@@ -45,25 +45,26 @@ along with this program; see the file COPYING. If not, see
 #pragma pack(4)
 typedef union kernel_pipebuf {
   unsigned int n[IN6_PKTINFOSZ];
-  struct f {
+  struct {
     unsigned int cnt;
     unsigned int in;
     unsigned int out;
-    unsigned int reserved[2];
+    unsigned long reserved;
   } flags;
 
-  struct b {
+  struct {
     unsigned int size;
-    unsigned long buffer;
+    unsigned long kaddr;
     unsigned long reserved;
   } pipe_buffer;
 
-  struct v {
-    unsigned long buffer;
+  struct {
+    unsigned long buf;
     unsigned int reserved[3];
   } victim_buffer;
 } kernel_pipebuf_t;
 #pragma pack()
+
 
 /**
  * public constants.
@@ -501,7 +502,7 @@ __kernel_init(payload_args_t* args) {
 static int
 kernel_write(unsigned long addr, void* data, unsigned long len) {
   kernel_pipebuf_t buf = {
-    .victim_buffer.buffer = addr,
+    .victim_buffer.buf = addr,
   };
 
   // sanity check for invalid kernel pointers
@@ -527,7 +528,7 @@ kernel_write(unsigned long addr, void* data, unsigned long len) {
 int
 kernel_copyin(const void *uaddr, unsigned long kaddr, unsigned long len) {
   kernel_pipebuf_t buf = {
-    .flags.reserved[0] = 0x40000000
+    .flags.reserved = 0x40000000
   };
 
   if(!kaddr || !uaddr || !len) {
@@ -540,7 +541,7 @@ kernel_copyin(const void *uaddr, unsigned long kaddr, unsigned long len) {
   }
 
   buf.pipe_buffer.size = 0x40000000;
-  buf.pipe_buffer.buffer = kaddr;
+  buf.pipe_buffer.kaddr = kaddr;
   buf.pipe_buffer.reserved = 0;
 
   if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
@@ -572,7 +573,7 @@ kernel_copyout(unsigned long kaddr, void *uaddr, unsigned long len) {
   }
 
   buf.pipe_buffer.size = 0x40000000;
-  buf.pipe_buffer.buffer = kaddr;
+  buf.pipe_buffer.kaddr = kaddr;
   buf.pipe_buffer.reserved = 0;
 
   if(kernel_write(pipe_addr + 12, &buf, sizeof(buf))) {
